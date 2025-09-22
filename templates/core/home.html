@@ -1,0 +1,233 @@
+{% extends 'base/base.html' %}
+
+{% block title %}LindaHost - Hospedagem Inteligente{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero-section">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h1 class="display-4 fw-bold mb-4">Hospedagem Inteligente</h1>
+                <p class="lead mb-4">
+                    Deploy automático para sites estáticos no Cloudflare Pages e containers no CapRover/AWS. 
+                    Integração completa com GitHub e pagamento via PIX.
+                </p>
+                <div class="d-flex gap-3">
+                    {% if user.is_authenticated %}
+                        <a href="{% url 'dashboard' %}" class="btn btn-light btn-lg">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                    {% else %}
+                        <a href="{% url 'admin:login' %}" class="btn btn-light btn-lg">
+                            <i class="bi bi-box-arrow-in-right"></i> Entrar
+                        </a>
+                    {% endif %}
+                    <a href="#features" class="btn btn-outline-light btn-lg">
+                        <i class="bi bi-info-circle"></i> Saiba Mais
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-6 text-center">
+                <i class="bi bi-cloud-upload" style="font-size: 200px; opacity: 0.3;"></i>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features Section -->
+<section id="features" class="py-5">
+    <div class="container">
+        <div class="row text-center mb-5">
+            <div class="col-12">
+                <h2 class="display-5 fw-bold">Recursos Principais</h2>
+                <p class="lead text-muted">Tudo que você precisa para hospedar seus projetos</p>
+            </div>
+        </div>
+        
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-lightning-charge text-primary" style="font-size: 3rem;"></i>
+                        <h4 class="card-title mt-3">Sites Estáticos</h4>
+                        <p class="card-text">
+                            Deploy automático no Cloudflare Pages com CDN global, 
+                            SSL automático e performance otimizada.
+                        </p>
+                        <ul class="list-unstyled text-start">
+                            <li><i class="bi bi-check text-success"></i> Build automático</li>
+                            <li><i class="bi bi-check text-success"></i> CDN global</li>
+                            <li><i class="bi bi-check text-success"></i> SSL gratuito</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-box text-primary" style="font-size: 3rem;"></i>
+                        <h4 class="card-title mt-3">Containers</h4>
+                        <p class="card-text">
+                            Hospedagem de aplicações em containers com CapRover 
+                            e backup automático na AWS ECS.
+                        </p>
+                        <ul class="list-unstyled text-start">
+                            <li><i class="bi bi-check text-success"></i> CapRover primário</li>
+                            <li><i class="bi bi-check text-success"></i> AWS ECS backup</li>
+                            <li><i class="bi bi-check text-success"></i> Auto-scaling</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-globe text-primary" style="font-size: 3rem;"></i>
+                        <h4 class="card-title mt-3">Domínios</h4>
+                        <p class="card-text">
+                            Registro e configuração automática de domínios 
+                            com DNS no Cloudflare e pagamento via PIX.
+                        </p>
+                        <ul class="list-unstyled text-start">
+                            <li><i class="bi bi-check text-success"></i> Registro automático</li>
+                            <li><i class="bi bi-check text-success"></i> DNS automático</li>
+                            <li><i class="bi bi-check text-success"></i> Pagamento PIX</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- How it Works Section -->
+<section class="py-5 bg-light">
+    <div class="container">
+        <div class="row text-center mb-5">
+            <div class="col-12">
+                <h2 class="display-5 fw-bold">Como Funciona</h2>
+                <p class="lead text-muted">Simples e rápido em 3 passos</p>
+            </div>
+        </div>
+        
+        <div class="row g-4">
+            <div class="col-md-4 text-center">
+                <div class="mb-3">
+                    <span class="badge bg-primary rounded-circle p-3" style="font-size: 1.5rem;">1</span>
+                </div>
+                <h4>Conecte seu GitHub</h4>
+                <p class="text-muted">
+                    Informe a URL do seu repositório GitHub e escolha 
+                    entre site estático ou container.
+                </p>
+            </div>
+            
+            <div class="col-md-4 text-center">
+                <div class="mb-3">
+                    <span class="badge bg-primary rounded-circle p-3" style="font-size: 1.5rem;">2</span>
+                </div>
+                <h4>Deploy Automático</h4>
+                <p class="text-muted">
+                    Nosso sistema faz o deploy automaticamente no melhor 
+                    servidor disponível (Cloudflare ou CapRover/AWS).
+                </p>
+            </div>
+            
+            <div class="col-md-4 text-center">
+                <div class="mb-3">
+                    <span class="badge bg-primary rounded-circle p-3" style="font-size: 1.5rem;">3</span>
+                </div>
+                <h4>Seu Site Online</h4>
+                <p class="text-muted">
+                    Seu site fica online com domínio personalizado, 
+                    SSL e CDN configurados automaticamente.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Pricing Section -->
+<section class="py-5">
+    <div class="container">
+        <div class="row text-center mb-5">
+            <div class="col-12">
+                <h2 class="display-5 fw-bold">Preços Simples</h2>
+                <p class="lead text-muted">Pague apenas pelo que usar</p>
+            </div>
+        </div>
+        
+        <div class="row g-4 justify-content-center">
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center p-4">
+                        <h4 class="card-title">Sites Estáticos</h4>
+                        <div class="display-6 text-primary fw-bold">R$ 0,20</div>
+                        <p class="text-muted">por deploy</p>
+                        <ul class="list-unstyled text-start">
+                            <li><i class="bi bi-check text-success"></i> Cloudflare Pages</li>
+                            <li><i class="bi bi-check text-success"></i> CDN global</li>
+                            <li><i class="bi bi-check text-success"></i> SSL automático</li>
+                            <li><i class="bi bi-check text-success"></i> Build automático</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center p-4">
+                        <h4 class="card-title">Containers</h4>
+                        <div class="display-6 text-primary fw-bold">R$ 0,50</div>
+                        <p class="text-muted">por deploy</p>
+                        <ul class="list-unstyled text-start">
+                            <li><i class="bi bi-check text-success"></i> CapRover + AWS</li>
+                            <li><i class="bi bi-check text-success"></i> Auto-scaling</li>
+                            <li><i class="bi bi-check text-success"></i> Backup automático</li>
+                            <li><i class="bi bi-check text-success"></i> Monitoramento</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center p-4">
+                        <h4 class="card-title">Domínios</h4>
+                        <div class="display-6 text-primary fw-bold">R$ 49,90</div>
+                        <p class="text-muted">por ano</p>
+                        <ul class="list-unstyled text-start">
+                            <li><i class="bi bi-check text-success"></i> Registro automático</li>
+                            <li><i class="bi bi-check text-success"></i> DNS Cloudflare</li>
+                            <li><i class="bi bi-check text-success"></i> SSL incluído</li>
+                            <li><i class="bi bi-check text-success"></i> Renovação automática</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="py-5 bg-primary text-white">
+    <div class="container text-center">
+        <h2 class="display-5 fw-bold mb-4">Pronto para começar?</h2>
+        <p class="lead mb-4">
+            Crie sua conta gratuita e faça seu primeiro deploy em minutos.
+        </p>
+        {% if user.is_authenticated %}
+            <a href="{% url 'dashboard' %}" class="btn btn-light btn-lg">
+                <i class="bi bi-speedometer2"></i> Ir para Dashboard
+            </a>
+        {% else %}
+            <a href="{% url 'admin:login' %}" class="btn btn-light btn-lg">
+                <i class="bi bi-person-plus"></i> Criar Conta
+            </a>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

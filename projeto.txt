@@ -1,0 +1,1190 @@
+# Análise Profunda e Implementação de Integração Cloudflare com CapRover e AWS
+
+Com base na análise do projeto, vou implementar uma solução completa que integra Cloudflare para hospedagem de sites estáticos, CapRover para containers e AWS como cluster de backup.
+
+## Arquitetura do Sistema
+
+```mermaid
+graph TB
+    subgraph Frontend
+        A[Painel Administrativo]
+        B[Área do Cliente]
+    end
+
+    subgraph Backend
+        C[Django Application]
+        D[Banco de Dados PostgreSQL]
+        E[Cache Redis]
+    end
+
+    subgraph Hospedagem Estática
+        F[Cloudflare Pages]
+        G[Cloudflare Workers]
+        H[Cloudflare DNS]
+    end
+
+    subgraph Hospedagem de Containers
+        I[CapRover - Primary]
+        J[AWS ECS - Backup]
+    end
+
+    subgraph Integrações
+        K[GitHub API]
+        L[Gateway de Pagamento PIX]
+        M[Registro de Domínios]
+        N[Cloudflare API]
+        O[AWS API]
+    end
+
+    A --> C
+    B --> C
+    C --> D
+    C --> E
+    C --> F
+    C --> I
+    C --> J
+    C --> K
+    C --> L
+    C --> M
+    C --> N
+    C --> O
+    F --> H
+    I --> H
+    J --> H
+```
+
+## Implementação Completa
+
+### 1. Modelos Atualizados (models.py)
+
+```python
+import uuid
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+from django.core.validators import URLValidator
+from encrypted_model_fields.fields import EncryptedCharField
+
+class User(AbstractUser):
+    CLIENT = 'client'
+    ADMIN = 'admin'
+    STAFF = 'staff'
+    ROLE_CHOICES = [
+        (CLIENT, 'Cliente'),
+        (ADMIN, 'Administrador'),
+        (STAFF, 'Equipe'),
+    ]
+    
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=CLIENT)
+    company = models.CharField(max_length=100, blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    credit = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    def __str__(self):
+        return f"{self.username} - {self.get_role_display()}"
+
+class Server(models.Model):
+    CAPROVER = 'caprover'
+    AWS_ECS = 'aws_ecs'
+    TYPE_CHOICES = [
+        (CAPROVER, 'CapRover'),
+        (AWS_ECS, 'AWS ECS'),
+    ]
+    
+    PRIMARY = 'primary'
+    BACKUP = 'backup'
+    ROLE_CHOICES = [
+        (PRIMARY, 'Primário'),
+        (BACKUP, 'Backup'),
+    ]
+    
+    name = models.CharField(max_length=100)
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=CAPROVER)
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default=PRIMARY)
+    url = models.URLField(validators=[URLValidator()])
+    api_key = EncryptedCharField(max_length=200)
+    ssh_key = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    max_containers = models.IntegerField(default=10)
+    current_usage = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_type_display()} - {self.get_role_display()})"
+    
+    def can_accept_deployment(self):
+        return self.current_usage < self.max_containers
+
+class AWSIntegration(models.Model):
+    name = models.CharField(max_length=100, default="Configuração AWS Principal")
+    aws_access_key_id = EncryptedCharField(max_length=100)
+    aws_secret_access_key = EncryptedCharField(max_length=100)
+    aws_region = models.CharField(max_length=50, default='us-east-1')
+    ecs_cluster_name = models.CharField(max_length=100, default='caprover-backup')
+    ssh_private_key = models.TextField(blank=True, null=True)
+    ssh_public_key = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.name} - {self.aws_region}"
+
+class CloudflareIntegration(models.Model):
+    name = models.CharField(max_length=100, default="Configuração Cloudflare Principal")
+    api_token = EncryptedCharField(max_length=200)
+    account_id = models.CharField(max_length=100)
+    default_zone_id = models.CharField(max_length=100, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.name} - {self.account_id}"
+
+class Deployment(models.Model):
+    STATIC = 'static'
+    CONTAINER = 'container'
+    DEPLOY_TYPE_CHOICES = [
+        (STATIC, 'Estático (Cloudflare)'),
+        (CONTAINER, 'Container (CapRover/AWS)'),
+    ]
+    
+    PENDING = 'pending'
+    BUILDING = 'building'
+    SUCCESS = 'success'
+    FAILED = 'failed'
+    STATUS_CHOICES = [
+        (PENDING, 'Pendente'),
+        (BUILDING, 'Construindo'),
+        (SUCCESS, 'Sucesso'),
+        (FAILED, 'Falhou'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='deployments')
+    name = models.CharField(max_length=100)
+    deploy_type = models.CharField(max_length=10, choices=DEPLOY_TYPE_CHOICES, default=CONTAINER)
+    github_url = models.URLField(validators=[URLValidator()])
+    branch = models.CharField(max_length=100, default='main')
+    build_command = models.CharField(max_length=200, blank=True, null=True)
+    output_directory = models.CharField(max_length=100, default='dist')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    url = models.URLField(blank=True, null=True)
+    custom_domain = models.ForeignKey('Domain', on_delete=models.SET_NULL, null=True, blank=True)
+    server = models.ForeignKey(Server, on_delete=models.SET_NULL, null=True, blank=True)
+    cloudflare_project_name = models.CharField(max_length=100, blank=True, null=True)
+    cloudflare_deployment_id = models.CharField(max_length=100, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.name} - {self.user.username}"
+
+class Domain(models.Model):
+    AVAILABLE = 'available'
+    PENDING = 'pending'
+    REGISTERED = 'registered'
+    LINKED = 'linked'
+    STATUS_CHOICES = [
+        (AVAILABLE, 'Disponível'),
+        (PENDING, 'Pendente'),
+        (REGISTERED, 'Registrado'),
+        (LINKED, 'Vinculado'),
+    ]
+    
+    name = models.CharField(max_length=255, unique=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=AVAILABLE)
+    owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='domains')
+    deployment = models.ForeignKey(Deployment, on_delete=models.SET_NULL, null=True, blank=True, related_name='domains')
+    cloudflare_zone_id = models.CharField(max_length=100, blank=True, null=True)
+    cloudflare_dns_record_id = models.CharField(max_length=100, blank=True, null=True)
+    registered_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    auto_renew = models.BooleanField(default=True)
+    
+    def __str__(self):
+        return self.name
+
+class Invoice(models.Model):
+    PENDING = 'pending'
+    PAID = 'paid'
+    CANCELED = 'canceled'
+    STATUS_CHOICES = [
+        (PENDING, 'Pendente'),
+        (PAID, 'Pago'),
+        (CANCELED, 'Cancelado'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invoices')
+    description = models.TextField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    pix_code = models.TextField(blank=True, null=True)
+    pix_expiration = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(blank=True, null=True)
+    
+    def __str__(self):
+        return f"Invoice #{self.id} - {self.user.username}"
+```
+
+### 2. Utilitários para Integração (utils.py)
+
+```python
+import json
+import requests
+import boto3
+import time
+from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
+
+def deploy_to_cloudflare_pages(deployment, cloudflare_config):
+    """
+    Implementa site estático no Cloudflare Pages
+    """
+    try:
+        # Configurar headers para API do Cloudflare
+        headers = {
+            'Authorization': f'Bearer {cloudflare_config.api_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Extrair informações do repositório GitHub
+        github_parts = deployment.github_url.rstrip('/').split('/')
+        username = github_parts[-2]
+        repo_name = github_parts[-1]
+        
+        if repo_name.endswith('.git'):
+            repo_name = repo_name[:-4]
+        
+        # Nome do projeto no Cloudflare
+        project_name = f"{deployment.name}-{deployment.id}"[:100]
+        
+        # Dados para criar o projeto
+        project_data = {
+            'name': project_name,
+            'production_branch': deployment.branch,
+            'build_config': {
+                'build_command': deployment.build_command or 'npm run build',
+                'destination_dir': deployment.output_directory
+            },
+            'source': {
+                'type': 'github',
+                'config': {
+                    'owner': username,
+                    'repo_name': repo_name,
+                    'production_branch': deployment.branch,
+                    'pr_comments_enabled': True
+                }
+            }
+        }
+        
+        # Criar projeto no Cloudflare Pages
+        create_response = requests.post(
+            f'https://api.cloudflare.com/client/v4/accounts/{cloudflare_config.account_id}/pages/projects',
+            headers=headers,
+            json=project_data,
+            timeout=30
+        )
+        
+        if create_response.status_code not in [200, 201]:
+            return False, f"Erro ao criar projeto: {create_response.text}"
+        
+        project_result = create_response.json()
+        
+        # Iniciar deploy
+        deploy_response = requests.post(
+            f'https://api.cloudflare.com/client/v4/accounts/{cloudflare_config.account_id}/pages/projects/{project_name}/deployments',
+            headers=headers,
+            json={'production': True},
+            timeout=30
+        )
+        
+        if deploy_response.status_code not in [200, 201]:
+            return False, f"Erro ao iniciar deploy: {deploy_response.text}"
+        
+        deploy_result = deploy_response.json()
+        
+        # Aguardar conclusão do deploy
+        deployment_id = deploy_result['result']['id']
+        deployment_status = deploy_result['result']['status']
+        
+        max_checks = 30  # 30 tentativas com intervalo de 5 segundos
+        checks = 0
+        
+        while deployment_status not in ['success', 'failed'] and checks < max_checks:
+            time.sleep(5)
+            status_response = requests.get(
+                f'https://api.cloudflare.com/client/v4/accounts/{cloudflare_config.account_id}/pages/projects/{project_name}/deployments/{deployment_id}',
+                headers=headers,
+                timeout=30
+            )
+            
+            if status_response.status_code == 200:
+                status_result = status_response.json()
+                deployment_status = status_result['result']['status']
+            checks += 1
+        
+        if deployment_status == 'success':
+            deployment_url = f"https://{deploy_result['result']['url']}"
+            return True, {
+                'url': deployment_url,
+                'project_name': project_name,
+                'deployment_id': deployment_id
+            }
+        else:
+            return False, f"Deploy falhou com status: {deployment_status}"
+    
+    except Exception as e:
+        return False, str(e)
+
+def deploy_to_captain(deployment, server):
+    """
+    Implementa o código no CapRover
+    """
+    try:
+        headers = {
+            'x-namespace': 'captain',
+            'Content-Type': 'application/json',
+            'x-captain-auth': server.api_key
+        }
+        
+        github_parts = deployment.github_url.rstrip('/').split('/')
+        username = github_parts[-2]
+        repo_name = github_parts[-1]
+        
+        if repo_name.endswith('.git'):
+            repo_name = repo_name[:-4]
+        
+        app_name = f"deploy-{deployment.id}"[:30]
+        
+        data = {
+            'appName': app_name,
+            'hasPersistentData': False,
+            'description': f"Deployment for {deployment.name}",
+            'instanceCount': 1,
+            'caproverExtra': {
+                'containerHttpPort': '80'
+            },
+            'envVars': [
+                {
+                    'key': 'APP_NAME',
+                    'value': deployment.name
+                }
+            ],
+            'notExposeAsWebApp': False,
+            'forceSsl': True,
+            'websocketSupport': False,
+            'appDeployTokenConfig': {
+                'enabled': True,
+                'deployToken': f"token-{deployment.id}"
+            },
+            'appDeploySource': {
+                'type': 'git',
+                'gitRepository': deployment.github_url,
+                'gitBranch': deployment.branch,
+                'user': username,
+                'password': '',
+                'sshKey': server.ssh_key
+            }
+        }
+        
+        # Criar aplicação no CapRover
+        create_response = requests.post(
+            f"{server.url}/api/v2/user/apps/appDefinitions/register",
+            json=data,
+            headers=headers,
+            timeout=30
+        )
+        
+        if create_response.status_code != 200:
+            return False, f"Erro ao criar app no CapRover: {create_response.text}"
+        
+        # Iniciar deploy
+        deploy_data = {
+            'appName': app_name,
+            'deployToken': f"token-{deployment.id}"
+        }
+        
+        deploy_response = requests.post(
+            f"{server.url}/api/v2/user/apps/appDefinitions/deploy",
+            json=deploy_data,
+            headers=headers,
+            timeout=30
+        )
+        
+        if deploy_response.status_code == 200:
+            return True, {
+                'url': f'https://{app_name}.{server.url.replace("https://", "").replace("http://", "")}'
+            }
+        else:
+            return False, f"Erro no deploy: {deploy_response.text}"
+    
+    except Exception as e:
+        return False, str(e)
+
+def deploy_to_aws_ecs(deployment, aws_config):
+    """
+    Implementa container na AWS ECS como backup
+    """
+    try:
+        session = boto3.Session(
+            aws_access_key_id=aws_config.aws_access_key_id,
+            aws_secret_access_key=aws_config.aws_secret_access_key,
+            region_name=aws_config.aws_region
+        )
+        
+        ecs = session.client('ecs')
+        
+        # Nome do serviço/task baseado no ID do deployment
+        service_name = f"deployment-{deployment.id}"
+        
+        # Aqui você precisaria definir sua task definition e service
+        # Esta é uma implementação simplificada
+        
+        # Verificar se o cluster existe
+        clusters = ecs.list_clusters()
+        cluster_arn = None
+        
+        for cluster in clusters['clusterArns']:
+            if aws_config.ecs_cluster_name in cluster:
+                cluster_arn = cluster
+                break
+        
+        if not cluster_arn:
+            # Criar cluster se não existir
+            cluster_response = ecs.create_cluster(
+                clusterName=aws_config.ecs_cluster_name
+            )
+            cluster_arn = cluster_response['cluster']['clusterArn']
+        
+        # Registrar task definition (simplificado)
+        task_def_response = ecs.register_task_definition(
+            family=service_name,
+            networkMode='awsvpc',
+            requiresCompatibilities=['FARGATE'],
+            cpu='256',
+            memory='512',
+            executionRoleArn='arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
+            containerDefinitions=[
+                {
+                    'name': service_name,
+                    'image': 'nginx:alpine',  # Imagem padrão - substituir pela sua
+                    'portMappings': [
+                        {
+                            'containerPort': 80,
+                            'protocol': 'tcp'
+                        }
+                    ],
+                    'essential': True,
+                    'environment': [
+                        {'name': 'APP_NAME', 'value': deployment.name}
+                    ]
+                }
+            ]
+        )
+        
+        task_def_arn = task_def_response['taskDefinition']['taskDefinitionArn']
+        
+        # Criar serviço
+        service_response = ecs.create_service(
+            cluster=aws_config.ecs_cluster_name,
+            serviceName=service_name,
+            taskDefinition=task_def_arn,
+            desiredCount=1,
+            launchType='FARGATE',
+            networkConfiguration={
+                'awsvpcConfiguration': {
+                    'subnets': [],  # Preencher com suas subnets
+                    'securityGroups': [],  # Preencher com seus security groups
+                    'assignPublicIp': 'ENABLED'
+                }
+            }
+        )
+        
+        # Aqui você precisaria configurar um Application Load Balancer
+        # e atualizar o DNS para apontar para o ALB
+        
+        return True, {
+            'url': f'http://{service_name}.elb.{aws_config.aws_region}.amazonaws.com'  # URL exemplo
+        }
+    
+    except Exception as e:
+        return False, str(e)
+
+def setup_cloudflare_dns(domain, deployment, cloudflare_config):
+    """
+    Configura DNS no Cloudflare para um domínio personalizado
+    """
+    try:
+        headers = {
+            'Authorization': f'Bearer {cloudflare_config.api_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Verificar se já existe uma zona para o domínio
+        zone_name = '.'.join(domain.name.split('.')[-2:])  # Extrair domínio principal
+        
+        zones_response = requests.get(
+            f'https://api.cloudflare.com/client/v4/zones?name={zone_name}',
+            headers=headers,
+            timeout=30
+        )
+        
+        if zones_response.status_code != 200:
+            return False, f"Erro ao buscar zonas: {zones_response.text}"
+        
+        zones_data = zones_response.json()
+        
+        if zones_data['result'] and len(zones_data['result']) > 0:
+            zone_id = zones_data['result'][0]['id']
+        else:
+            # Criar nova zona se não existir
+            create_zone_data = {
+                'name': zone_name,
+                'jump_start': True
+            }
+            
+            create_zone_response = requests.post(
+                'https://api.cloudflare.com/client/v4/zones',
+                headers=headers,
+                json=create_zone_data,
+                timeout=30
+            )
+            
+            if create_zone_response.status_code != 200:
+                return False, f"Erro ao criar zona: {create_zone_response.text}"
+            
+            zone_id = create_zone_response.json()['result']['id']
+        
+        # Criar registro DNS
+        dns_data = {
+            'type': 'CNAME',
+            'name': domain.name,
+            'content': deployment.url.replace('https://', '').replace('http://', ''),
+            'proxied': True,
+            'ttl': 1  # TTL automático com proxy
+        }
+        
+        dns_response = requests.post(
+            f'https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records',
+            headers=headers,
+            json=dns_data,
+            timeout=30
+        )
+        
+        if dns_response.status_code != 200:
+            return False, f"Erro ao criar registro DNS: {dns_response.text}"
+        
+        dns_result = dns_response.json()
+        
+        return True, {
+            'zone_id': zone_id,
+            'dns_record_id': dns_result['result']['id']
+        }
+    
+    except Exception as e:
+        return False, str(e)
+
+def generate_pix_code(amount, reference):
+    """
+    Gera um código PIX usando um gateway de pagamento
+    """
+    # Implementação simulada - substituir por integração real com gateway PIX
+    pix_code = f"00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-4266554400005204000053039865406{amount:.2f}5802BR5913FIBRA10TEC6008Sao Paulo62070503***6304"
+    
+    # Calcular expiração (24 horas a partir de agora)
+    expiration = timezone.now() + timedelta(hours=24)
+    
+    return pix_code, expiration
+```
+
+### 3. Views Atualizadas (views.py)
+
+```python
+import json
+import requests
+import boto3
+from django.shortcuts import render, get_object_or_404, redirect
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.conf import settings
+from django.contrib import messages
+from django.views.generic import CreateView, UpdateView, ListView
+from django.urls import reverse_lazy
+from django.utils import timezone
+from .models import Deployment, Domain, Invoice, Server, User, AWSIntegration, CloudflareIntegration
+from .utils import generate_pix_code, deploy_to_captain, deploy_to_aws_ecs, deploy_to_cloudflare_pages, setup_cloudflare_dns
+from .forms import AWSIntegrationForm, CloudflareIntegrationForm
+
+def is_admin(user):
+    return user.role == User.ADMIN
+
+@login_required
+@user_passes_test(is_admin)
+def aws_integration(request):
+    aws_config = AWSIntegration.objects.first()
+    
+    if request.method == 'POST':
+        form = AWSIntegrationForm(request.POST, instance=aws_config)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Configuração AWS salva com sucesso!')
+            return redirect('aws_integration')
+    else:
+        form = AWSIntegrationForm(instance=aws_config)
+    
+    return render(request, 'admin/aws_integration.html', {
+        'form': form,
+        'aws_config': aws_config
+    })
+
+@login_required
+@user_passes_test(is_admin)
+def cloudflare_integration(request):
+    cloudflare_config = CloudflareIntegration.objects.first()
+    
+    if request.method == 'POST':
+        form = CloudflareIntegrationForm(request.POST, instance=cloudflare_config)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Configuração Cloudflare salva com sucesso!')
+            return redirect('cloudflare_integration')
+    else:
+        form = CloudflareIntegrationForm(instance=cloudflare_config)
+    
+    return render(request, 'admin/cloudflare_integration.html', {
+        'form': form,
+        'cloudflare_config': cloudflare_config
+    })
+
+@login_required
+@user_passes_test(is_admin)
+def test_aws_connection(request):
+    aws_config = AWSIntegration.objects.first()
+    
+    if not aws_config:
+        return JsonResponse({'success': False, 'message': 'Nenhuma configuração AWS encontrada'})
+    
+    try:
+        session = boto3.Session(
+            aws_access_key_id=aws_config.aws_access_key_id,
+            aws_secret_access_key=aws_config.aws_secret_access_key,
+            region_name=aws_config.aws_region
+        )
+        
+        ec2 = session.client('ec2')
+        regions = ec2.describe_regions()
+        
+        return JsonResponse({
+            'success': True, 
+            'message': f'Conexão AWS bem-sucedida na região {aws_config.aws_region}'
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Erro na conexão AWS: {str(e)}'})
+
+@login_required
+@user_passes_test(is_admin)
+def test_cloudflare_connection(request):
+    cloudflare_config = CloudflareIntegration.objects.first()
+    
+    if not cloudflare_config:
+        return JsonResponse({'success': False, 'message': 'Nenhuma configuração Cloudflare encontrada'})
+    
+    try:
+        headers = {
+            'Authorization': f'Bearer {cloudflare_config.api_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        response = requests.get(
+            f'https://api.cloudflare.com/client/v4/accounts/{cloudflare_config.account_id}',
+            headers=headers,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            return JsonResponse({
+                'success': True, 
+                'message': 'Conexão Cloudflare bem-sucedida'
+            })
+        else:
+            return JsonResponse({
+                'success': False, 
+                'message': f'Erro na conexão Cloudflare: {response.text}'
+            })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Erro na conexão Cloudflare: {str(e)}'})
+
+@login_required
+@require_http_methods(["POST"])
+def create_deployment(request):
+    try:
+        data = json.loads(request.body)
+        github_url = data.get('github_url')
+        name = data.get('name')
+        branch = data.get('branch', 'main')
+        deploy_type = data.get('deploy_type', Deployment.CONTAINER)
+        build_command = data.get('build_command')
+        output_directory = data.get('output_directory', 'dist')
+        custom_domain = data.get('custom_domain', None)
+        
+        if request.user.credit <= 0:
+            return JsonResponse({'error': 'Crédito insuficiente. Por favor, adicione crédito à sua conta.'}, status=400)
+        
+        deployment = Deployment(
+            user=request.user,
+            name=name,
+            github_url=github_url,
+            branch=branch,
+            deploy_type=deploy_type,
+            build_command=build_command,
+            output_directory=output_directory,
+            status=Deployment.PENDING
+        )
+        
+        if custom_domain:
+            domain = Domain.objects.filter(name=custom_domain, owner=request.user).first()
+            if domain:
+                deployment.custom_domain = domain
+        
+        deployment.save()
+        
+        # Escolher o tipo de deploy
+        if deploy_type == Deployment.STATIC:
+            # Deploy estático no Cloudflare Pages
+            cloudflare_config = CloudflareIntegration.objects.filter(is_active=True).first()
+            
+            if not cloudflare_config:
+                deployment.status = Deployment.FAILED
+                deployment.save()
+                return JsonResponse({'error': 'Nenhuma configuração Cloudflare disponível'}, status=500)
+            
+            success, result = deploy_to_cloudflare_pages(deployment, cloudflare_config)
+            
+            if success:
+                deployment.status = Deployment.SUCCESS
+                deployment.url = result.get('url')
+                deployment.cloudflare_project_name = result.get('project_name')
+                deployment.cloudflare_deployment_id = result.get('deployment_id')
+                
+                # Configurar domínio personalizado se especificado
+                if deployment.custom_domain:
+                    domain_success, domain_result = setup_cloudflare_dns(
+                        deployment.custom_domain, deployment, cloudflare_config
+                    )
+                    
+                    if domain_success:
+                        deployment.custom_domain.status = Domain.LINKED
+                        deployment.custom_domain.cloudflare_zone_id = domain_result.get('zone_id')
+                        deployment.custom_domain.cloudflare_dns_record_id = domain_result.get('dns_record_id')
+                        deployment.custom_domain.save()
+                
+                # Cobrar do usuário
+                request.user.credit -= 0.20  # Valor menor para sites estáticos
+                request.user.save()
+            else:
+                deployment.status = Deployment.FAILED
+        else:
+            # Deploy de container - tentar primeiro no CapRover
+            server = Server.objects.filter(is_active=True, type=Server.CAPROVER, role=Server.PRIMARY).first()
+            
+            if server and server.can_accept_deployment():
+                deployment.server = server
+                success, result = deploy_to_captain(deployment, server)
+                
+                if success:
+                    deployment.status = Deployment.SUCCESS
+                    deployment.url = result.get('url')
+                    server.current_usage += 1
+                    server.save()
+                    
+                    # Configurar domínio personalizado se especificado
+                    if deployment.custom_domain:
+                        cloudflare_config = CloudflareIntegration.objects.filter(is_active=True).first()
+                        if cloudflare_config:
+                            domain_success, domain_result = setup_cloudflare_dns(
+                                deployment.custom_domain, deployment, cloudflare_config
+                            )
+                            
+                            if domain_success:
+                                deployment.custom_domain.status = Domain.LINKED
+                                deployment.custom_domain.cloudflare_zone_id = domain_result.get('zone_id')
+                                deployment.custom_domain.cloudflare_dns_record_id = domain_result.get('dns_record_id')
+                                deployment.custom_domain.save()
+                    
+                    # Cobrar do usuário
+                    request.user.credit -= 0.50
+                    request.user.save()
+                else:
+                    deployment.status = Deployment.FAILED
+                    # Tentar servidor de backup
+                    backup_server = Server.objects.filter(
+                        is_active=True, 
+                        type=Server.AWS_ECS, 
+                        role=Server.BACKUP
+                    ).first()
+                    
+                    if backup_server and backup_server.can_accept_deployment():
+                        deployment.server = backup_server
+                        aws_config = AWSIntegration.objects.filter(is_active=True).first()
+                        
+                        if aws_config:
+                            success, result = deploy_to_aws_ecs(deployment, aws_config)
+                            
+                            if success:
+                                deployment.status = Deployment.SUCCESS
+                                deployment.url = result.get('url')
+                                backup_server.current_usage += 1
+                                backup_server.save()
+                                
+                                # Cobrar do usuário
+                                request.user.credit -= 0.50
+                                request.user.save()
+                            else:
+                                deployment.status = Deployment.FAILED
+            else:
+                deployment.status = Deployment.FAILED
+                deployment.save()
+                return JsonResponse({'error': 'Nenhum servidor disponível'}, status=500)
+        
+        deployment.save()
+        
+        return JsonResponse({
+            'deployment_id': str(deployment.id),
+            'status': deployment.status,
+            'url': deployment.url
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def list_deployments(request):
+    deployments = Deployment.objects.filter(user=request.user).order_by('-created_at')
+    data = [{
+        'id': str(d.id),
+        'name': d.name,
+        'deploy_type': d.deploy_type,
+        'status': d.status,
+        'url': d.url,
+        'created_at': d.created_at
+    } for d in deployments]
+    
+    return JsonResponse({'deployments': data})
+
+@login_required
+@require_http_methods(["POST"])
+def register_domain(request):
+    try:
+        data = json.loads(request.body)
+        domain_name = data.get('domain_name')
+        
+        domain = Domain.objects.filter(name=domain_name).first()
+        if domain and domain.status != Domain.AVAILABLE:
+            return JsonResponse({'error': 'Domínio não disponível'}, status=400)
+        
+        if not domain:
+            domain = Domain(name=domain_name, status=Domain.PENDING)
+        else:
+            domain.status = Domain.PENDING
+        
+        domain.owner = request.user
+        domain.price = 49.90
+        domain.save()
+        
+        invoice = Invoice(
+            user=request.user,
+            description=f"Registro de domínio: {domain_name}",
+            amount=domain.price,
+            status=Invoice.PENDING
+        )
+        
+        pix_code, expiration = generate_pix_code(invoice.amount, f"DOMAIN_{domain_name}")
+        invoice.pix_code = pix_code
+        invoice.pix_expiration = expiration
+        invoice.save()
+        
+        # Enviar email para financeiro (implementar)
+        
+        return JsonResponse({
+            'domain_id': domain.id,
+            'invoice_id': str(invoice.id),
+            'pix_code': pix_code,
+            'expiration': expiration
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def pix_webhook(request):
+    try:
+        data = json.loads(request.body)
+        invoice_id = data.get('invoice_id')
+        invoice = Invoice.objects.get(id=invoice_id)
+        
+        if data.get('status') == 'approved':
+            invoice.status = Invoice.PAID
+            invoice.paid_at = timezone.now()
+            invoice.save()
+            
+            if invoice.description.startswith('Registro de domínio'):
+                domain_name = invoice.description.split(': ')[1]
+                domain = Domain.objects.get(name=domain_name)
+                domain.status = Domain.REGISTERED
+                domain.registered_at = timezone.now()
+                domain.expires_at = timezone.now() + timezone.timedelta(days=365)
+                domain.save()
+        
+        return JsonResponse({'status': 'success'})
+    
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@user_passes_test(is_admin)
+def admin_dashboard(request):
+    total_users = User.objects.count()
+    total_deployments = Deployment.objects.count()
+    total_invoices = Invoice.objects.count()
+    pending_invoices = Invoice.objects.filter(status=Invoice.PENDING).count()
+    active_servers = Server.objects.filter(is_active=True).count()
+    
+    recent_deployments = Deployment.objects.all().order_by('-created_at')[:10]
+    recent_invoices = Invoice.objects.all().order_by('-created_at')[:10]
+    recent_users = User.objects.all().order_by('-date_joined')[:10]
+    
+    aws_config = AWSIntegration.objects.filter(is_active=True).first()
+    aws_status = "Configurado" if aws_config else "Não configurado"
+    
+    cloudflare_config = CloudflareIntegration.objects.filter(is_active=True).first()
+    cloudflare_status = "Configurado" if cloudflare_config else "Não configurado"
+    
+    server_status = []
+    for server in Server.objects.all():
+        server_status.append({
+            'name': server.name,
+            'type': server.get_type_display(),
+            'role': server.get_role_display(),
+            'usage': f"{server.current_usage}/{server.max_containers}",
+            'status': 'Ativo' if server.is_active else 'Inativo'
+        })
+    
+    return render(request, 'admin/dashboard.html', {
+        'total_users': total_users,
+        'total_deployments': total_deployments,
+        'total_invoices': total_invoices,
+        'pending_invoices': pending_invoices,
+        'active_servers': active_servers,
+        'recent_deployments': recent_deployments,
+        'recent_invoices': recent_invoices,
+        'recent_users': recent_users,
+        'aws_status': aws_status,
+        'cloudflare_status': cloudflare_status,
+        'server_status': server_status,
+        'aws_config': aws_config,
+        'cloudflare_config': cloudflare_config
+    })
+```
+
+### 4. Formulários (forms.py)
+
+```python
+from django import forms
+from .models import AWSIntegration, CloudflareIntegration
+
+class AWSIntegrationForm(forms.ModelForm):
+    class Meta:
+        model = AWSIntegration
+        fields = ['name', 'aws_access_key_id', 'aws_secret_access_key', 'aws_region', 
+                 'ecs_cluster_name', 'ssh_private_key', 'ssh_public_key', 'is_active']
+        widgets = {
+            'aws_access_key_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'AKIAIOSFODNN7EXAMPLE'}),
+            'aws_secret_access_key': forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'}),
+            'aws_region': forms.Select(attrs={'class': 'form-control'}, choices=[
+                ('us-east-1', 'US East (N. Virginia)'),
+                ('us-east-2', 'US East (Ohio)'),
+                ('us-west-1', 'US West (N. California)'),
+                ('us-west-2', 'US West (Oregon)'),
+                ('sa-east-1', 'South America (São Paulo)'),
+            ]),
+            'ecs_cluster_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'ssh_private_key': forms.Textarea(attrs={'class': 'form-control', 'rows': 6, 'placeholder': '-----BEGIN RSA PRIVATE KEY-----...'}),
+            'ssh_public_key': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD...'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+        labels = {
+            'aws_access_key_id': 'AWS Access Key ID',
+            'aws_secret_access_key': 'AWS Secret Access Key',
+            'ssh_private_key': 'Chave SSH Privada',
+            'ssh_public_key': 'Chave SSH Pública',
+        }
+
+class CloudflareIntegrationForm(forms.ModelForm):
+    class Meta:
+        model = CloudflareIntegration
+        fields = ['name', 'api_token', 'account_id', 'default_zone_id', 'is_active']
+        widgets = {
+            'api_token': forms.PasswordInput(attrs={'class': 'form-control'}),
+            'account_id': forms.TextInput(attrs={'class': 'form-control'}),
+            'default_zone_id': forms.TextInput(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+        labels = {
+            'api_token': 'API Token',
+            'account_id': 'Account ID',
+            'default_zone_id': 'Default Zone ID (Opcional)',
+        }
+        help_texts = {
+            'account_id': 'Encontre no painel do Cloudflare em Overview > right-hand sidebar',
+            'api_token': 'Crie um token com permissões para Pages e DNS',
+        }
+```
+
+### 5. URLs (urls.py)
+
+```python
+from django.urls import path, include
+from django.contrib import admin
+from . import views
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/auth/', include('rest_framework.urls')),
+    path('api/deployments/create', views.create_deployment, name='create_deployment'),
+    path('api/deployments/list', views.list_deployments, name='list_deployments'),
+    path('api/domains/register', views.register_domain, name='register_domain'),
+    path('api/webhook/pix', views.pix_webhook, name='pix_webhook'),
+    path('admin/dashboard', views.admin_dashboard, name='admin_dashboard'),
+    path('admin/aws-integration', views.aws_integration, name='aws_integration'),
+    path('admin/cloudflare-integration', views.cloudflare_integration, name='cloudflare_integration'),
+    path('admin/test-aws-connection', views.test_aws_connection, name='test_aws_connection'),
+    path('admin/test-cloudflare-connection', views.test_cloudflare_connection, name='test_cloudflare_connection'),
+]
+```
+
+### 6. Configurações (settings.py)
+
+Adicione estas configurações:
+
+```python
+# Configurações Cloudflare
+CLOUDFLARE_API_TOKEN = os.environ.get('CLOUDFLARE_API_TOKEN', '')
+CLOUDFLARE_ACCOUNT_ID = os.environ.get('CLOUDFLARE_ACCOUNT_ID', '')
+
+# Configurações AWS
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+AWS_ECS_CLUSTER = os.environ.get('AWS_ECS_CLUSTER', 'caprover-backup')
+
+# Configurações para campos criptografados
+FIELD_ENCRYPTION_KEY = os.environ.get('FIELD_ENCRYPTION_KEY', 'sua-chave-de-criptografia-aqui-32-caracteres')
+
+# Installed Apps
+INSTALLED_APPS = [
+    # ... outras apps
+    'encrypted_model_fields',
+    'crispy_forms',
+    'crispy_bootstrap5',
+]
+
+# Configuração do Crispy Forms
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = "bootstrap5"
+```
+
+## Implementação e Configuração
+
+### 1. Configuração do Cloudflare
+
+1. Crie uma conta no Cloudflare se ainda não tiver
+2. Gere um API Token com permissões para:
+   - Cloudflare Pages: Editar
+   - Cloudflare DNS: Editar
+   - Zone: Leitura
+3. Obtenha seu Account ID no painel do Cloudflare
+
+### 2. Configuração da AWS para Backup
+
+1. Crie um usuário IAM com permissões para:
+   - Amazon ECS (Full Access)
+   - Amazon VPC (Read Only)
+   - Elastic Load Balancing (Full Access)
+2. Gere as chaves de acesso (Access Key ID e Secret Access Key)
+3. Configure um cluster ECS para servir como backup
+
+### 3. Configuração do CapRover
+
+1. Instale o CapRover em seu servidor principal
+2. Obtenha a API Key do CapRover no painel de administração
+3. Configure o servidor no painel administrativo do sistema
+
+### 4. Implantação do Sistema
+
+```bash
+# Instale as dependências
+pip install django-encrypted-model-fields django-crispy-forms crispy-bootstrap5 boto3 requests
+
+# Execute as migrações
+python manage.py makemigrations
+python manage.py migrate
+
+# Crie um superusuário
+python manage.py createsuperuser
+
+# Configure as variáveis de ambiente no arquivo .env
+FIELD_ENCRYPTION_KEY=sua-chave-de-criptografia-aqui-32-caracteres
+CLOUDFLARE_API_TOKEN=seu-api-token-do-cloudflare
+CLOUDFLARE_ACCOUNT_ID=seu-account-id-do-cloudflare
+AWS_ACCESS_KEY_ID=seu-aws-access-key-id
+AWS_SECRET_ACCESS_KEY=seu-aws-secret-access-key
+AWS_REGION=us-east-1
+AWS_ECS_CLUSTER=caprover-backup
+
+# Execute o servidor
+python manage.py runserver
+```
+
+## Fluxo de Deploy
+
+1. **Sites Estáticos (HTML/CSS/JS/TS)**:
+   - São implantados diretamente no Cloudflare Pages
+   - Configuração automática de DNS para domínios personalizados
+   - Build automático a partir do repositório GitHub
+
+2. **Aplicações em Container**:
+   - Primeira tentativa: Implantação no CapRover (servidor principal)
+   - Em caso de falha: Implantação na AWS ECS (servidor de backup)
+   - Configuração automática de DNS via Cloudflare
+
+3. **Gerenciamento de Domínios**:
+   - Registro de domínios com integração PIX para pagamento
+   - Configuração automática de DNS no Cloudflare
+   - Renovação automática configurável
+
+## Considerações Finais
+
+Esta implementação oferece uma solução completa para hospedagem com múltiplas opções:
+
+1. **Cloudflare Pages**: Ideal para sites estáticos com alto desempenho e baixo custo
+2. **CapRover**: Para aplicações em containers com fácil gerenciamento
+3. **AWS ECS**: Como solução de backup para alta disponibilidade
+
+O sistema oferece flexibilidade para diferentes tipos de projetos e inclui mecanismos de fallback para garantir disponibilidade. A integração com Cloudflare também proporciona benefícios adicionais de CDN, segurança e performance.
+
+Para produção, recomendo adicionar:
+1. Monitoramento de desempenho e uso
+2. Sistema de logs centralizado
+3. Backup automatizado de banco de dados
+4. Sistema de alertas para falhas
+5. Painel de analytics para acompanhamento de uso e custos

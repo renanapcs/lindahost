@@ -1,0 +1,269 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Dashboard Administrativo - LindaHost{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-6 fw-bold">
+                <i class="bi bi-gear"></i> Dashboard Administrativo
+            </h1>
+            <p class="lead text-muted">Painel de controle do sistema</p>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Total de Usuários</h6>
+                            <h3 class="mb-0">{{ total_users }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-people" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Deployments</h6>
+                            <h3 class="mb-0">{{ total_deployments }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-cloud-check" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Faturas</h6>
+                            <h3 class="mb-0">{{ total_invoices }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-receipt" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Servidores Ativos</h6>
+                            <h3 class="mb-0">{{ active_servers }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-server" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Integration Status -->
+    <div class="row mb-5">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-cloud"></i> Status das Integrações</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span>Cloudflare</span>
+                        <span class="badge bg-{% if cloudflare_status == 'Configurado' %}success{% else %}danger{% endif %}">
+                            {{ cloudflare_status }}
+                        </span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span>AWS</span>
+                        <span class="badge bg-{% if aws_status == 'Configurado' %}success{% else %}danger{% endif %}">
+                            {{ aws_status }}
+                        </span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'cloudflare_integration' %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-gear"></i> Configurar Cloudflare
+                        </a>
+                        <a href="{% url 'aws_integration' %}" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-gear"></i> Configurar AWS
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-server"></i> Status dos Servidores</h5>
+                </div>
+                <div class="card-body">
+                    {% for server in server_status %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>{{ server.name }}</strong><br>
+                            <small class="text-muted">{{ server.type }} - {{ server.role }}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-{% if server.status == 'Ativo' %}success{% else %}danger{% endif %}">
+                                {{ server.status }}
+                            </span><br>
+                            <small class="text-muted">{{ server.usage }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Deployments Recentes</h5>
+                </div>
+                <div class="card-body">
+                    {% for deployment in recent_deployments %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>{{ deployment.name }}</strong><br>
+                            <small class="text-muted">{{ deployment.user.username }}</small>
+                        </div>
+                        <span class="badge bg-{% if deployment.status == 'success' %}success{% elif deployment.status == 'failed' %}danger{% else %}warning{% endif %}">
+                            {{ deployment.get_status_display }}
+                        </span>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted">Nenhum deployment recente</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-receipt"></i> Faturas Pendentes</h5>
+                </div>
+                <div class="card-body">
+                    {% for invoice in recent_invoices %}
+                    {% if invoice.status == 'pending' %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>R$ {{ invoice.amount|floatformat:2 }}</strong><br>
+                            <small class="text-muted">{{ invoice.user.username }}</small>
+                        </div>
+                        <span class="badge bg-warning">{{ invoice.get_status_display }}</span>
+                    </div>
+                    {% endif %}
+                    {% empty %}
+                    <p class="text-muted">Nenhuma fatura pendente</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-people"></i> Usuários Recentes</h5>
+                </div>
+                <div class="card-body">
+                    {% for user in recent_users %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>{{ user.username }}</strong><br>
+                            <small class="text-muted">{{ user.get_role_display }}</small>
+                        </div>
+                        <span class="badge bg-info">{{ user.date_joined|date:"d/m" }}</span>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted">Nenhum usuário recente</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <h3 class="mb-3">Ações Administrativas</h3>
+            <div class="d-flex gap-3 flex-wrap">
+                <a href="{% url 'admin:index' %}" class="btn btn-primary">
+                    <i class="bi bi-gear"></i> Django Admin
+                </a>
+                <a href="{% url 'cloudflare_integration' %}" class="btn btn-info">
+                    <i class="bi bi-cloud"></i> Configurar Cloudflare
+                </a>
+                <a href="{% url 'aws_integration' %}" class="btn btn-success">
+                    <i class="bi bi-amazon"></i> Configurar AWS
+                </a>
+                <button class="btn btn-warning" onclick="testCloudflareConnection()">
+                    <i class="bi bi-wifi"></i> Testar Cloudflare
+                </button>
+                <button class="btn btn-warning" onclick="testAWSConnection()">
+                    <i class="bi bi-wifi"></i> Testar AWS
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function testCloudflareConnection() {
+    fetch('/admin/test-cloudflare-connection')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+        } else {
+            alert('❌ ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('❌ Erro ao testar conexão: ' + error);
+    });
+}
+
+function testAWSConnection() {
+    fetch('/admin/test-aws-connection')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+        } else {
+            alert('❌ ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('❌ Erro ao testar conexão: ' + error);
+    });
+}
+</script>
+{% endblock %}

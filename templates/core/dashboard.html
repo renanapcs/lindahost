@@ -1,0 +1,364 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Dashboard - LindaHost{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-6 fw-bold">
+                <i class="bi bi-speedometer2"></i> Dashboard
+            </h1>
+            <p class="lead text-muted">Bem-vindo, {{ user.username }}!</p>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Crédito Disponível</h6>
+                            <h3 class="mb-0">R$ {{ user.credit|floatformat:2 }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-wallet2" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Deployments Ativos</h6>
+                            <h3 class="mb-0">{{ deployments|length }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-cloud-check" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Domínios</h6>
+                            <h3 class="mb-0">{{ domains|length }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-globe" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Role</h6>
+                            <h3 class="mb-0">{{ user.get_role_display }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-person-badge" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h3 class="mb-3">Ações Rápidas</h3>
+            <div class="d-flex gap-3 flex-wrap">
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#deployModal">
+                    <i class="bi bi-cloud-upload"></i> Novo Deploy
+                </button>
+                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#domainModal">
+                    <i class="bi bi-globe"></i> Registrar Domínio
+                </button>
+                <button class="btn btn-info" onclick="loadDeployments()">
+                    <i class="bi bi-arrow-clockwise"></i> Atualizar Lista
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Deployments -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h3 class="mb-3">Deployments Recentes</h3>
+            <div class="card">
+                <div class="card-body">
+                    {% if deployments %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Tipo</th>
+                                        <th>Status</th>
+                                        <th>URL</th>
+                                        <th>Data</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for deployment in deployments %}
+                                    <tr>
+                                        <td>{{ deployment.name }}</td>
+                                        <td>
+                                            <span class="badge bg-{% if deployment.deploy_type == 'static' %}info{% else %}primary{% endif %}">
+                                                {{ deployment.get_deploy_type_display }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{% if deployment.status == 'success' %}success{% elif deployment.status == 'failed' %}danger{% else %}warning{% endif %}">
+                                                {{ deployment.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if deployment.url %}
+                                                <a href="{{ deployment.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-box-arrow-up-right"></i> Abrir
+                                                </a>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ deployment.created_at|date:"d/m/Y H:i" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #6c757d;"></i>
+                            <h5 class="mt-3 text-muted">Nenhum deployment encontrado</h5>
+                            <p class="text-muted">Faça seu primeiro deploy clicando no botão acima.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Domains -->
+    <div class="row">
+        <div class="col-12">
+            <h3 class="mb-3">Domínios</h3>
+            <div class="card">
+                <div class="card-body">
+                    {% if domains %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Domínio</th>
+                                        <th>Status</th>
+                                        <th>Preço</th>
+                                        <th>Data</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for domain in domains %}
+                                    <tr>
+                                        <td>{{ domain.name }}</td>
+                                        <td>
+                                            <span class="badge bg-{% if domain.status == 'registered' %}success{% elif domain.status == 'pending' %}warning{% else %}secondary{% endif %}">
+                                                {{ domain.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>R$ {{ domain.price|floatformat:2 }}</td>
+                                        <td>{{ domain.created_at|date:"d/m/Y H:i" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-globe" style="font-size: 3rem; color: #6c757d;"></i>
+                            <h5 class="mt-3 text-muted">Nenhum domínio registrado</h5>
+                            <p class="text-muted">Registre seu primeiro domínio clicando no botão acima.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Deploy Modal -->
+<div class="modal fade" id="deployModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Novo Deploy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="deployForm">
+                    <div class="mb-3">
+                        <label for="deployName" class="form-label">Nome do Projeto</label>
+                        <input type="text" class="form-control" id="deployName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="githubUrl" class="form-label">URL do GitHub</label>
+                        <input type="url" class="form-control" id="githubUrl" placeholder="https://github.com/usuario/repositorio" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="branch" class="form-label">Branch</label>
+                        <input type="text" class="form-control" id="branch" value="main">
+                    </div>
+                    <div class="mb-3">
+                        <label for="deployType" class="form-label">Tipo de Deploy</label>
+                        <select class="form-select" id="deployType">
+                            <option value="static">Site Estático (Cloudflare)</option>
+                            <option value="container">Container (CapRover/AWS)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="buildCommandGroup" style="display: none;">
+                        <label for="buildCommand" class="form-label">Comando de Build</label>
+                        <input type="text" class="form-control" id="buildCommand" placeholder="npm run build">
+                    </div>
+                    <div class="mb-3" id="outputDirGroup" style="display: none;">
+                        <label for="outputDirectory" class="form-label">Diretório de Saída</label>
+                        <input type="text" class="form-control" id="outputDirectory" value="dist">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="createDeployment()">Criar Deploy</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Domain Modal -->
+<div class="modal fade" id="domainModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Registrar Domínio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="domainForm">
+                    <div class="mb-3">
+                        <label for="domainName" class="form-label">Nome do Domínio</label>
+                        <input type="text" class="form-control" id="domainName" placeholder="exemplo.com.br" required>
+                        <div class="form-text">Digite o domínio sem http:// ou https://</div>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Preço:</strong> R$ 49,90 por ano
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="registerDomain()">Registrar Domínio</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Toggle build command and output directory based on deploy type
+document.getElementById('deployType').addEventListener('change', function() {
+    const buildCommandGroup = document.getElementById('buildCommandGroup');
+    const outputDirGroup = document.getElementById('outputDirGroup');
+    
+    if (this.value === 'static') {
+        buildCommandGroup.style.display = 'block';
+        outputDirGroup.style.display = 'block';
+    } else {
+        buildCommandGroup.style.display = 'none';
+        outputDirGroup.style.display = 'none';
+    }
+});
+
+function createDeployment() {
+    const form = document.getElementById('deployForm');
+    const formData = new FormData(form);
+    
+    const data = {
+        name: document.getElementById('deployName').value,
+        github_url: document.getElementById('githubUrl').value,
+        branch: document.getElementById('branch').value,
+        deploy_type: document.getElementById('deployType').value,
+        build_command: document.getElementById('buildCommand').value,
+        output_directory: document.getElementById('outputDirectory').value
+    };
+    
+    fetch('/api/deployments/create', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Erro: ' + data.error);
+        } else {
+            alert('Deploy criado com sucesso!');
+            location.reload();
+        }
+    })
+    .catch(error => {
+        alert('Erro ao criar deploy: ' + error);
+    });
+}
+
+function registerDomain() {
+    const domainName = document.getElementById('domainName').value;
+    
+    fetch('/api/domains/register', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({domain_name: domainName})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Erro: ' + data.error);
+        } else {
+            alert('Domínio registrado! Código PIX: ' + data.pix_code);
+            location.reload();
+        }
+    })
+    .catch(error => {
+        alert('Erro ao registrar domínio: ' + error);
+    });
+}
+
+function loadDeployments() {
+    location.reload();
+}
+</script>
+{% endblock %}
