@@ -160,7 +160,17 @@ AWS_REGION = config('AWS_REGION', default='us-east-1')
 AWS_ECS_CLUSTER = config('AWS_ECS_CLUSTER', default='caprover-backup')
 
 # Configurações para campos criptografados
-FIELD_ENCRYPTION_KEY = config('FIELD_ENCRYPTION_KEY', default='sua-chave-de-criptografia-aqui-32-caracteres')
+FIELD_ENCRYPTION_KEY = config('FIELD_ENCRYPTION_KEY', default='yPwRgTcRj_PZLcVuX_3AteopUU68f4ZtFDTCM-8FNpo=')
+
+# CSRF Trusted Origins (Django 4.0+)
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost',
+    'http://127.0.0.1', 
+    'https://localhost',
+    'https://127.0.0.1',
+    'http://localhost:8000',
+    'https://localhost:8000'
+]
 
 # Templates
 TEMPLATES[0]['DIRS'] = [BASE_DIR / 'templates']
