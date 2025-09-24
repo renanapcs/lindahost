@@ -362,3 +362,169 @@ def generate_pix_code(amount, reference):
     expiration = timezone.now() + timedelta(hours=24)
     
     return pix_code, expiration
+
+def generate_html_with_deepseek(site_info):
+    """
+    Gera HTML automaticamente usando a API do DeepSeek
+    """
+    try:
+        # Configurar headers para API do DeepSeek
+        headers = {
+            'Authorization': 'Bearer sk-your-deepseek-api-key',  # Substituir pela chave real
+            'Content-Type': 'application/json'
+        }
+        
+        # Preparar prompt para geração do HTML
+        prompt = f"""
+        Crie um site HTML moderno e responsivo para uma empresa/pessoa com as seguintes informações:
+
+        Nome do Site: {site_info.site_name}
+        Tipo: {site_info.get_site_type_display()}
+        Descrição: {site_info.description}
+        Empresa/Pessoa: {site_info.company_name}
+        Email: {site_info.contact_email}
+        Telefone: {site_info.contact_phone or 'Não informado'}
+        Endereço: {site_info.address or 'Não informado'}
+        
+        Redes Sociais:
+        - Website: {site_info.website_url or 'Não informado'}
+        - Facebook: {site_info.facebook_url or 'Não informado'}
+        - Instagram: {site_info.instagram_url or 'Não informado'}
+        - LinkedIn: {site_info.linkedin_url or 'Não informado'}
+        - Twitter: {site_info.twitter_url or 'Não informado'}
+        
+        Serviços/Produtos:
+        {site_info.services or 'Não informado'}
+        
+        Palavras-chave: {site_info.keywords or 'Não informado'}
+        
+        Configurações de Design:
+        - Cor Primária: {site_info.primary_color}
+        - Cor Secundária: {site_info.secondary_color}
+        - Fonte: {site_info.font_family}
+        
+        Instruções:
+        1. Crie um site moderno, responsivo e profissional
+        2. Use Bootstrap 5 para responsividade
+        3. Inclua seções: Header, Hero, Sobre, Serviços, Contato, Footer
+        4. Use as cores especificadas no design
+        5. Torne o site otimizado para SEO
+        6. Inclua meta tags apropriadas
+        7. Use ícones do Bootstrap Icons
+        8. Torne o site acessível e rápido
+        9. Inclua formulário de contato funcional
+        10. Use gradientes e animações sutis
+        
+        Retorne apenas o código HTML completo, sem explicações adicionais.
+        """
+        
+        # Dados para enviar para a API
+        data = {
+            "model": "deepseek-chat",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.7,
+            "max_tokens": 4000
+        }
+        
+        # Fazer requisição para a API do DeepSeek
+        response = requests.post(
+            'https://api.deepseek.com/v1/chat/completions',
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            generated_html = result['choices'][0]['message']['content']
+            
+            # Limpar o HTML gerado (remover markdown se presente)
+            if generated_html.startswith('```html'):
+                generated_html = generated_html[7:]
+            if generated_html.endswith('```'):
+                generated_html = generated_html[:-3]
+            
+            generated_html = generated_html.strip()
+            
+            return True, generated_html
+        else:
+            return False, f"Erro na API do DeepSeek: {response.text}"
+    
+    except Exception as e:
+        return False, f"Erro ao gerar HTML: {str(e)}"
+
+def generate_css_with_deepseek(site_info):
+    """
+    Gera CSS personalizado usando a API do DeepSeek
+    """
+    try:
+        headers = {
+            'Authorization': 'Bearer sk-your-deepseek-api-key',  # Substituir pela chave real
+            'Content-Type': 'application/json'
+        }
+        
+        prompt = f"""
+        Crie um arquivo CSS moderno e responsivo para complementar o site HTML gerado.
+        
+        Configurações de Design:
+        - Cor Primária: {site_info.primary_color}
+        - Cor Secundária: {site_info.secondary_color}
+        - Fonte: {site_info.font_family}
+        
+        Instruções:
+        1. Crie estilos modernos e profissionais
+        2. Use CSS Grid e Flexbox para layouts
+        3. Inclua animações sutis e transições suaves
+        4. Torne o design responsivo para mobile
+        5. Use as cores especificadas como variáveis CSS
+        6. Inclua estilos para formulários, botões e cards
+        7. Adicione efeitos hover e focus
+        8. Otimize para performance
+        9. Use gradientes e sombras modernas
+        10. Inclua estilos para seções: hero, sobre, serviços, contato
+        
+        Retorne apenas o código CSS completo, sem explicações adicionais.
+        """
+        
+        data = {
+            "model": "deepseek-chat",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.7,
+            "max_tokens": 2000
+        }
+        
+        response = requests.post(
+            'https://api.deepseek.com/v1/chat/completions',
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            generated_css = result['choices'][0]['message']['content']
+            
+            # Limpar o CSS gerado
+            if generated_css.startswith('```css'):
+                generated_css = generated_css[6:]
+            if generated_css.endswith('```'):
+                generated_css = generated_css[:-3]
+            
+            generated_css = generated_css.strip()
+            
+            return True, generated_css
+        else:
+            return False, f"Erro na API do DeepSeek: {response.text}"
+    
+    except Exception as e:
+        return False, f"Erro ao gerar CSS: {str(e)}"

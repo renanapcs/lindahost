@@ -1,0 +1,283 @@
+{% extends 'base/base.html' %}
+
+{% block title %}{{ site_info.site_name }} - LindaHost{% endblock %}
+
+{% block extra_css %}
+<style>
+    .info-card {
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.3s ease;
+    }
+    .info-card:hover {
+        transform: translateY(-2px);
+    }
+    .status-badge {
+        font-size: 0.9rem;
+    }
+    .color-preview {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        border: 2px solid #dee2e6;
+        display: inline-block;
+        margin-right: 10px;
+    }
+    .action-buttons {
+        gap: 0.5rem;
+    }
+    .info-section {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .info-section h6 {
+        color: #0d6efd;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #0d6efd;
+        padding-bottom: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-info-circle"></i> {{ site_info.site_name }}</h2>
+                <div class="d-flex action-buttons">
+                    <a href="{% url 'site_info_edit' site_info.pk %}" class="btn btn-outline-primary">
+                        <i class="bi bi-pencil"></i> Editar
+                    </a>
+                    <a href="{% url 'site_info_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Status e Ações -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card info-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="card-title mb-1">Status do Site</h5>
+                                    {% if site_info.is_generated %}
+                                        <span class="badge bg-success status-badge">
+                                            <i class="bi bi-check-circle"></i> HTML Gerado
+                                        </span>
+                                        <small class="text-muted ms-2">
+                                            Gerado em {{ site_info.generation_date|date:"d/m/Y H:i" }}
+                                        </small>
+                                    {% else %}
+                                        <span class="badge bg-warning status-badge">
+                                            <i class="bi bi-clock"></i> HTML Pendente
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <div class="d-flex action-buttons">
+                                    {% if not site_info.is_generated %}
+                                    <button class="btn btn-success" onclick="generateHtml('{{ site_info.pk }}')">
+                                        <i class="bi bi-magic"></i> Gerar HTML com IA
+                                    </button>
+                                    {% else %}
+                                    <a href="{% url 'site_info_preview' site_info.pk %}" class="btn btn-info">
+                                        <i class="bi bi-eye"></i> Visualizar Preview
+                                    </a>
+                                    <button class="btn btn-warning" onclick="deploySite('{{ site_info.pk }}')">
+                                        <i class="bi bi-rocket"></i> Fazer Deploy
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <!-- Informações Básicas -->
+                <div class="col-md-6 mb-4">
+                    <div class="info-section">
+                        <h6><i class="bi bi-info-square"></i> Informações Básicas</h6>
+                        <p><strong>Nome do Site:</strong> {{ site_info.site_name }}</p>
+                        <p><strong>Tipo:</strong> {{ site_info.get_site_type_display }}</p>
+                        <p><strong>Descrição:</strong><br>{{ site_info.description }}</p>
+                        {% if site_info.keywords %}
+                        <p><strong>Palavras-chave:</strong> {{ site_info.keywords }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Informações da Empresa -->
+                <div class="col-md-6 mb-4">
+                    <div class="info-section">
+                        <h6><i class="bi bi-building"></i> Informações da Empresa</h6>
+                        <p><strong>Empresa/Pessoa:</strong> {{ site_info.company_name }}</p>
+                        <p><strong>Email:</strong> <a href="mailto:{{ site_info.contact_email }}">{{ site_info.contact_email }}</a></p>
+                        {% if site_info.contact_phone %}
+                        <p><strong>Telefone:</strong> {{ site_info.contact_phone }}</p>
+                        {% endif %}
+                        {% if site_info.address %}
+                        <p><strong>Endereço:</strong><br>{{ site_info.address }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Redes Sociais -->
+                <div class="col-md-6 mb-4">
+                    <div class="info-section">
+                        <h6><i class="bi bi-share"></i> Redes Sociais</h6>
+                        {% if site_info.website_url %}
+                        <p><strong>Website:</strong> <a href="{{ site_info.website_url }}" target="_blank">{{ site_info.website_url }}</a></p>
+                        {% endif %}
+                        {% if site_info.facebook_url %}
+                        <p><strong>Facebook:</strong> <a href="{{ site_info.facebook_url }}" target="_blank">{{ site_info.facebook_url }}</a></p>
+                        {% endif %}
+                        {% if site_info.instagram_url %}
+                        <p><strong>Instagram:</strong> <a href="{{ site_info.instagram_url }}" target="_blank">{{ site_info.instagram_url }}</a></p>
+                        {% endif %}
+                        {% if site_info.linkedin_url %}
+                        <p><strong>LinkedIn:</strong> <a href="{{ site_info.linkedin_url }}" target="_blank">{{ site_info.linkedin_url }}</a></p>
+                        {% endif %}
+                        {% if site_info.twitter_url %}
+                        <p><strong>Twitter:</strong> <a href="{{ site_info.twitter_url }}" target="_blank">{{ site_info.twitter_url }}</a></p>
+                        {% endif %}
+                        {% if not site_info.website_url and not site_info.facebook_url and not site_info.instagram_url and not site_info.linkedin_url and not site_info.twitter_url %}
+                        <p class="text-muted">Nenhuma rede social configurada</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Serviços/Produtos -->
+                <div class="col-md-6 mb-4">
+                    <div class="info-section">
+                        <h6><i class="bi bi-list-check"></i> Serviços/Produtos</h6>
+                        {% if site_info.services %}
+                        <div style="white-space: pre-line;">{{ site_info.services }}</div>
+                        {% else %}
+                        <p class="text-muted">Nenhum serviço/produto informado</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Configurações de Design -->
+                <div class="col-md-12 mb-4">
+                    <div class="info-section">
+                        <h6><i class="bi bi-palette"></i> Configurações de Design</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <p><strong>Cor Primária:</strong><br>
+                                    <span class="color-preview" style="background-color: {{ site_info.primary_color }};"></span>
+                                    {{ site_info.primary_color }}
+                                </p>
+                            </div>
+                            <div class="col-md-4">
+                                <p><strong>Cor Secundária:</strong><br>
+                                    <span class="color-preview" style="background-color: {{ site_info.secondary_color }};"></span>
+                                    {{ site_info.secondary_color }}
+                                </p>
+                            </div>
+                            <div class="col-md-4">
+                                <p><strong>Fonte:</strong> {{ site_info.font_family }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Informações do Sistema -->
+                <div class="col-md-12 mb-4">
+                    <div class="info-section">
+                        <h6><i class="bi bi-gear"></i> Informações do Sistema</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Criado em:</strong> {{ site_info.created_at|date:"d/m/Y H:i" }}</p>
+                                <p><strong>Última atualização:</strong> {{ site_info.updated_at|date:"d/m/Y H:i" }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>ID:</strong> {{ site_info.id }}</p>
+                                {% if site_info.deployment %}
+                                <p><strong>Deployment:</strong> <a href="{% url 'dashboard' %}">{{ site_info.deployment.name }}</a></p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function generateHtml(siteInfoId) {
+    if (confirm('Deseja gerar o HTML automaticamente usando IA? Este processo pode levar alguns minutos.')) {
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando...';
+        button.disabled = true;
+        
+        fetch(`/site-info/${siteInfoId}/generate/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Erro ao gerar HTML');
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+}
+
+function deploySite(siteInfoId) {
+    if (confirm('Deseja fazer deploy deste site?')) {
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-hourglass-split"></i> Deploying...';
+        button.disabled = true;
+        
+        fetch(`/site-info/${siteInfoId}/deploy/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Deploy iniciado com sucesso!');
+            } else {
+                alert('Erro: ' + data.message);
+            }
+            button.innerHTML = originalText;
+            button.disabled = false;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Erro no deploy');
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+}
+</script>
+{% endblock %}

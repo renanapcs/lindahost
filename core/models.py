@@ -169,3 +169,69 @@ class Invoice(models.Model):
     
     def __str__(self):
         return f"Invoice #{self.id} - {self.user.username}"
+
+class SiteInfo(models.Model):
+    """Modelo para armazenar informações do site para geração automática"""
+    
+    BUSINESS = 'business'
+    PORTFOLIO = 'portfolio'
+    BLOG = 'blog'
+    ECOMMERCE = 'ecommerce'
+    LANDING = 'landing'
+    TYPE_CHOICES = [
+        (BUSINESS, 'Site Empresarial'),
+        (PORTFOLIO, 'Portfólio'),
+        (BLOG, 'Blog'),
+        (ECOMMERCE, 'E-commerce'),
+        (LANDING, 'Landing Page'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='site_infos')
+    deployment = models.ForeignKey(Deployment, on_delete=models.CASCADE, related_name='site_info', null=True, blank=True)
+    
+    # Informações básicas
+    site_name = models.CharField(max_length=200, verbose_name="Nome do Site")
+    site_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=BUSINESS, verbose_name="Tipo de Site")
+    description = models.TextField(verbose_name="Descrição")
+    keywords = models.TextField(blank=True, null=True, verbose_name="Palavras-chave (separadas por vírgula)")
+    
+    # Informações da empresa/pessoa
+    company_name = models.CharField(max_length=200, verbose_name="Nome da Empresa/Pessoa")
+    contact_email = models.EmailField(verbose_name="Email de Contato")
+    contact_phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Telefone")
+    address = models.TextField(blank=True, null=True, verbose_name="Endereço")
+    
+    # Redes sociais
+    website_url = models.URLField(blank=True, null=True, verbose_name="Website")
+    facebook_url = models.URLField(blank=True, null=True, verbose_name="Facebook")
+    instagram_url = models.URLField(blank=True, null=True, verbose_name="Instagram")
+    linkedin_url = models.URLField(blank=True, null=True, verbose_name="LinkedIn")
+    twitter_url = models.URLField(blank=True, null=True, verbose_name="Twitter")
+    
+    # Serviços/Produtos
+    services = models.TextField(blank=True, null=True, verbose_name="Serviços/Produtos (um por linha)")
+    
+    # Configurações de design
+    primary_color = models.CharField(max_length=7, default="#0d6efd", verbose_name="Cor Primária")
+    secondary_color = models.CharField(max_length=7, default="#6c757d", verbose_name="Cor Secundária")
+    font_family = models.CharField(max_length=100, default="Inter", verbose_name="Fonte")
+    
+    # Conteúdo gerado
+    generated_html = models.TextField(blank=True, null=True, verbose_name="HTML Gerado")
+    generated_css = models.TextField(blank=True, null=True, verbose_name="CSS Gerado")
+    
+    # Status
+    is_generated = models.BooleanField(default=False, verbose_name="HTML Gerado")
+    generation_date = models.DateTimeField(blank=True, null=True, verbose_name="Data de Geração")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Informação do Site"
+        verbose_name_plural = "Informações dos Sites"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.site_name} - {self.user.username}"

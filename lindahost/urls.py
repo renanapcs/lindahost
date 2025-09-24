@@ -34,6 +34,15 @@ urlpatterns = [
     path('admin/cloudflare-integration', views.cloudflare_integration, name='cloudflare_integration'),
     path('admin/test-aws-connection', views.test_aws_connection, name='test_aws_connection'),
     path('admin/test-cloudflare-connection', views.test_cloudflare_connection, name='test_cloudflare_connection'),
+    
+    # Site Info URLs
+    path('site-info/', views.site_info_list, name='site_info_list'),
+    path('site-info/create/', views.site_info_create, name='site_info_create'),
+    path('site-info/<uuid:pk>/', views.site_info_detail, name='site_info_detail'),
+    path('site-info/<uuid:pk>/edit/', views.site_info_edit, name='site_info_edit'),
+    path('site-info/<uuid:pk>/generate/', views.site_info_generate_html, name='site_info_generate_html'),
+    path('site-info/<uuid:pk>/preview/', views.site_info_preview, name='site_info_preview'),
+    path('site-info/<uuid:pk>/deploy/', views.site_info_deploy, name='site_info_deploy'),
 ]
 
 if settings.DEBUG:

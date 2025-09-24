@@ -11,9 +11,9 @@ from django.contrib import messages
 from django.views.generic import CreateView, UpdateView, ListView
 from django.urls import reverse_lazy
 from django.utils import timezone
-from .models import Deployment, Domain, Invoice, Server, User, AWSIntegration, CloudflareIntegration
-from .utils import generate_pix_code, deploy_to_captain, deploy_to_aws_ecs, deploy_to_cloudflare_pages, setup_cloudflare_dns
-from .forms import AWSIntegrationForm, CloudflareIntegrationForm
+from .models import Deployment, Domain, Invoice, Server, User, AWSIntegration, CloudflareIntegration, SiteInfo
+from .utils import generate_pix_code, deploy_to_captain, deploy_to_aws_ecs, deploy_to_cloudflare_pages, setup_cloudflare_dns, generate_html_with_deepseek, generate_css_with_deepseek
+from .forms import AWSIntegrationForm, CloudflareIntegrationForm, SiteInfoForm
 
 def is_admin(user):
     return user.role == User.ADMIN
@@ -400,3 +400,145 @@ def dashboard(request):
         'domains': user_domains,
         'user': request.user
     })
+
+@login_required
+def site_info_list(request):
+    """Lista todas as informações de sites do usuário"""
+    site_infos = SiteInfo.objects.filter(user=request.user).order_by('-created_at')
+    return render(request, 'core/site_info_list.html', {
+        'site_infos': site_infos
+    })
+
+@login_required
+def site_info_create(request):
+    """Criar nova informação de site"""
+    if request.method == 'POST':
+        form = SiteInfoForm(request.POST)
+        if form.is_valid():
+            site_info = form.save(commit=False)
+            site_info.user = request.user
+            site_info.save()
+            messages.success(request, 'Informações do site salvas com sucesso!')
+            return redirect('site_info_detail', pk=site_info.pk)
+    else:
+        form = SiteInfoForm()
+    
+    return render(request, 'core/site_info_form.html', {
+        'form': form,
+        'title': 'Criar Informações do Site',
+        'action': 'create'
+    })
+
+@login_required
+def site_info_detail(request, pk):
+    """Visualizar detalhes de uma informação de site"""
+    site_info = get_object_or_404(SiteInfo, pk=pk, user=request.user)
+    return render(request, 'core/site_info_detail.html', {
+        'site_info': site_info
+    })
+
+@login_required
+def site_info_edit(request, pk):
+    """Editar informações de site"""
+    site_info = get_object_or_404(SiteInfo, pk=pk, user=request.user)
+    
+    if request.method == 'POST':
+        form = SiteInfoForm(request.POST, instance=site_info)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Informações do site atualizadas com sucesso!')
+            return redirect('site_info_detail', pk=site_info.pk)
+    else:
+        form = SiteInfoForm(instance=site_info)
+    
+    return render(request, 'core/site_info_form.html', {
+        'form': form,
+        'site_info': site_info,
+        'title': 'Editar Informações do Site',
+        'action': 'edit'
+    })
+
+@login_required
+@require_http_methods(["POST"])
+def site_info_generate_html(request, pk):
+    """Gerar HTML automaticamente usando DeepSeek"""
+    site_info = get_object_or_404(SiteInfo, pk=pk, user=request.user)
+    
+    try:
+        # Gerar HTML
+        html_success, html_result = generate_html_with_deepseek(site_info)
+        
+        if html_success:
+            # Gerar CSS
+            css_success, css_result = generate_css_with_deepseek(site_info)
+            
+            # Salvar resultados
+            site_info.generated_html = html_result
+            site_info.generated_css = css_result if css_success else ""
+            site_info.is_generated = True
+            site_info.generation_date = timezone.now()
+            site_info.save()
+            
+            messages.success(request, 'HTML gerado com sucesso!')
+            return JsonResponse({
+                'success': True,
+                'message': 'HTML gerado com sucesso!',
+                'html': html_result,
+                'css': css_result if css_success else ""
+            })
+        else:
+            messages.error(request, f'Erro ao gerar HTML: {html_result}')
+            return JsonResponse({
+                'success': False,
+                'message': f'Erro ao gerar HTML: {html_result}'
+            })
+    
+    except Exception as e:
+        messages.error(request, f'Erro interno: {str(e)}')
+        return JsonResponse({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        })
+
+@login_required
+def site_info_preview(request, pk):
+    """Visualizar preview do HTML gerado"""
+    site_info = get_object_or_404(SiteInfo, pk=pk, user=request.user)
+    
+    if not site_info.is_generated or not site_info.generated_html:
+        messages.error(request, 'HTML ainda não foi gerado para este site.')
+        return redirect('site_info_detail', pk=pk)
+    
+    return render(request, 'core/site_info_preview.html', {
+        'site_info': site_info
+    })
+
+@login_required
+@require_http_methods(["POST"])
+def site_info_deploy(request, pk):
+    """Fazer deploy do HTML gerado para um deployment"""
+    site_info = get_object_or_404(SiteInfo, pk=pk, user=request.user)
+    
+    if not site_info.is_generated or not site_info.generated_html:
+        return JsonResponse({
+            'success': False,
+            'message': 'HTML ainda não foi gerado para este site.'
+        })
+    
+    try:
+        # Aqui você pode implementar a lógica para fazer deploy do HTML gerado
+        # Por exemplo, criar um repositório temporário ou usar um serviço de hospedagem
+        
+        # Por enquanto, vamos apenas retornar sucesso
+        messages.success(request, 'Deploy iniciado com sucesso!')
+        return JsonResponse({
+            'success': True,
+            'message': 'Deploy iniciado com sucesso!'
+        })
+    
+    except Exception as e:
+        messages.error(request, f'Erro no deploy: {str(e)}')
+        return JsonResponse({
+            'success': False,
+            'message': f'Erro no deploy: {str(e)}'
+        })

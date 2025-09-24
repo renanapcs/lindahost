@@ -1,0 +1,268 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Preview - {{ site_info.site_name }} - LindaHost{% endblock %}
+
+{% block extra_css %}
+<style>
+    .preview-container {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+        background: white;
+    }
+    .preview-header {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .preview-frame {
+        width: 100%;
+        height: 80vh;
+        border: none;
+        background: white;
+    }
+    .action-buttons {
+        gap: 0.5rem;
+    }
+    .code-section {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    .code-section pre {
+        background: #2d3748;
+        color: #e2e8f0;
+        padding: 1rem;
+        border-radius: 4px;
+        overflow-x: auto;
+        max-height: 400px;
+    }
+    .tab-content {
+        border: 1px solid #dee2e6;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        padding: 1rem;
+        background: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-eye"></i> Preview - {{ site_info.site_name }}</h2>
+                <div class="d-flex action-buttons">
+                    <button class="btn btn-outline-primary" onclick="copyHtml()">
+                        <i class="bi bi-clipboard"></i> Copiar HTML
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="copyCss()">
+                        <i class="bi bi-clipboard"></i> Copiar CSS
+                    </button>
+                    <button class="btn btn-warning" onclick="deploySite('{{ site_info.pk }}')">
+                        <i class="bi bi-rocket"></i> Fazer Deploy
+                    </button>
+                    <a href="{% url 'site_info_detail' site_info.pk %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Preview do Site -->
+            <div class="preview-container">
+                <div class="preview-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-globe"></i> {{ site_info.site_name }}
+                        </h5>
+                        <div>
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle"></i> HTML Gerado
+                            </span>
+                            <small class="text-muted ms-2">
+                                {{ site_info.generation_date|date:"d/m/Y H:i" }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <iframe 
+                    id="preview-frame" 
+                    class="preview-frame" 
+                    srcdoc="{{ site_info.generated_html|escape }}"
+                    title="Preview do Site">
+                </iframe>
+            </div>
+            
+            <!-- Código Fonte -->
+            <div class="mt-4">
+                <ul class="nav nav-tabs" id="codeTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="html-tab" data-bs-toggle="tab" data-bs-target="#html-content" type="button" role="tab">
+                            <i class="bi bi-file-code"></i> HTML
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="css-tab" data-bs-toggle="tab" data-bs-target="#css-content" type="button" role="tab">
+                            <i class="bi bi-file-code"></i> CSS
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="codeTabsContent">
+                    <div class="tab-pane fade show active" id="html-content" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">Código HTML</h6>
+                            <button class="btn btn-sm btn-outline-primary" onclick="copyHtml()">
+                                <i class="bi bi-clipboard"></i> Copiar
+                            </button>
+                        </div>
+                        <pre><code id="html-code">{{ site_info.generated_html }}</code></pre>
+                    </div>
+                    <div class="tab-pane fade" id="css-content" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">Código CSS</h6>
+                            <button class="btn btn-sm btn-outline-primary" onclick="copyCss()">
+                                <i class="bi bi-clipboard"></i> Copiar
+                            </button>
+                        </div>
+                        {% if site_info.generated_css %}
+                        <pre><code id="css-code">{{ site_info.generated_css }}</code></pre>
+                        {% else %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> CSS não foi gerado para este site.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Informações do Site -->
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="bi bi-info-circle"></i> Informações do Site</h6>
+                            <p><strong>Nome:</strong> {{ site_info.site_name }}</p>
+                            <p><strong>Tipo:</strong> {{ site_info.get_site_type_display }}</p>
+                            <p><strong>Empresa:</strong> {{ site_info.company_name }}</p>
+                            <p><strong>Email:</strong> {{ site_info.contact_email }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="bi bi-palette"></i> Design</h6>
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="color-preview" style="background-color: {{ site_info.primary_color }}; width: 20px; height: 20px; border-radius: 4px; margin-right: 8px;"></span>
+                                <span><strong>Primária:</strong> {{ site_info.primary_color }}</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="color-preview" style="background-color: {{ site_info.secondary_color }}; width: 20px; height: 20px; border-radius: 4px; margin-right: 8px;"></span>
+                                <span><strong>Secundária:</strong> {{ site_info.secondary_color }}</span>
+                            </div>
+                            <p><strong>Fonte:</strong> {{ site_info.font_family }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyHtml() {
+    const htmlCode = document.getElementById('html-code').textContent;
+    navigator.clipboard.writeText(htmlCode).then(function() {
+        showToast('HTML copiado para a área de transferência!', 'success');
+    }, function(err) {
+        console.error('Erro ao copiar: ', err);
+        showToast('Erro ao copiar HTML', 'error');
+    });
+}
+
+function copyCss() {
+    const cssCode = document.getElementById('css-code').textContent;
+    if (cssCode.trim()) {
+        navigator.clipboard.writeText(cssCode).then(function() {
+            showToast('CSS copiado para a área de transferência!', 'success');
+        }, function(err) {
+            console.error('Erro ao copiar: ', err);
+            showToast('Erro ao copiar CSS', 'error');
+        });
+    } else {
+        showToast('Não há CSS para copiar', 'warning');
+    }
+}
+
+function deploySite(siteInfoId) {
+    if (confirm('Deseja fazer deploy deste site?')) {
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-hourglass-split"></i> Deploying...';
+        button.disabled = true;
+        
+        fetch(`/site-info/${siteInfoId}/deploy/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Deploy iniciado com sucesso!', 'success');
+            } else {
+                showToast('Erro: ' + data.message, 'error');
+            }
+            button.innerHTML = originalText;
+            button.disabled = false;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Erro no deploy', 'error');
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+}
+
+function showToast(message, type) {
+    // Criar toast simples
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'warning'} alert-dismissible fade show position-fixed`;
+    toast.style.top = '20px';
+    toast.style.right = '20px';
+    toast.style.zIndex = '9999';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Remover após 3 segundos
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 3000);
+}
+
+// Adicionar token CSRF para as requisições
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!csrfToken) {
+        const token = document.createElement('input');
+        token.type = 'hidden';
+        token.name = 'csrfmiddlewaretoken';
+        token.value = '{{ csrf_token }}';
+        document.body.appendChild(token);
+    }
+});
+</script>
+{% endblock %}

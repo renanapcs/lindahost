@@ -1,0 +1,173 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Informações do Site - LindaHost{% endblock %}
+
+{% block extra_css %}
+<style>
+    .site-info-card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .site-info-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .status-badge {
+        font-size: 0.8rem;
+    }
+    .action-buttons {
+        gap: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-info-circle"></i> Informações do Site</h2>
+                <a href="{% url 'site_info_create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Nova Informação
+                </a>
+            </div>
+            
+            {% if site_infos %}
+                <div class="row">
+                    {% for site_info in site_infos %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card site-info-card h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <h5 class="card-title">{{ site_info.site_name }}</h5>
+                                    {% if site_info.is_generated %}
+                                        <span class="badge bg-success status-badge">
+                                            <i class="bi bi-check-circle"></i> Gerado
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-warning status-badge">
+                                            <i class="bi bi-clock"></i> Pendente
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                
+                                <p class="card-text text-muted">
+                                    <strong>Tipo:</strong> {{ site_info.get_site_type_display }}<br>
+                                    <strong>Empresa:</strong> {{ site_info.company_name }}<br>
+                                    <strong>Criado:</strong> {{ site_info.created_at|date:"d/m/Y H:i" }}
+                                </p>
+                                
+                                <p class="card-text">
+                                    {{ site_info.description|truncatewords:20 }}
+                                </p>
+                                
+                                <div class="d-flex action-buttons flex-wrap">
+                                    <a href="{% url 'site_info_detail' site_info.pk %}" class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-eye"></i> Ver
+                                    </a>
+                                    <a href="{% url 'site_info_edit' site_info.pk %}" class="btn btn-outline-secondary btn-sm">
+                                        <i class="bi bi-pencil"></i> Editar
+                                    </a>
+                                    {% if not site_info.is_generated %}
+                                    <button class="btn btn-outline-success btn-sm" onclick="generateHtml('{{ site_info.pk }}')">
+                                        <i class="bi bi-magic"></i> Gerar HTML
+                                    </button>
+                                    {% else %}
+                                    <a href="{% url 'site_info_preview' site_info.pk %}" class="btn btn-outline-info btn-sm">
+                                        <i class="bi bi-eye"></i> Preview
+                                    </a>
+                                    <button class="btn btn-outline-warning btn-sm" onclick="deploySite('{{ site_info.pk }}')">
+                                        <i class="bi bi-rocket"></i> Deploy
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-info-circle text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="text-muted mt-3">Nenhuma informação de site encontrada</h4>
+                    <p class="text-muted">Comece criando uma nova informação de site para gerar HTML automaticamente.</p>
+                    <a href="{% url 'site_info_create' %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Criar Primeira Informação
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function generateHtml(siteInfoId) {
+    if (confirm('Deseja gerar o HTML automaticamente usando IA? Este processo pode levar alguns minutos.')) {
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando...';
+        button.disabled = true;
+        
+        fetch(`/site-info/${siteInfoId}/generate/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Erro ao gerar HTML');
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+}
+
+function deploySite(siteInfoId) {
+    if (confirm('Deseja fazer deploy deste site?')) {
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-hourglass-split"></i> Deploying...';
+        button.disabled = true;
+        
+        fetch(`/site-info/${siteInfoId}/deploy/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Deploy iniciado com sucesso!');
+            } else {
+                alert('Erro: ' + data.message);
+            }
+            button.innerHTML = originalText;
+            button.disabled = false;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Erro no deploy');
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+}
+</script>
+{% endblock %}

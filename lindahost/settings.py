@@ -27,8 +27,17 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-v2bi$iomj^hnhuv8o#7l+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = ['*']
 
+# CSRF Configuration
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost',
+    'http://127.0.0.1',
+    'https://localhost',
+    'https://127.0.0.1',
+    'https://localhost:8000',
+    'https://supreme-guide-75xg6w9r54q2w6jg-8000.app.github.dev'
+]
 
 # Application definition
 
@@ -160,7 +169,7 @@ AWS_REGION = config('AWS_REGION', default='us-east-1')
 AWS_ECS_CLUSTER = config('AWS_ECS_CLUSTER', default='caprover-backup')
 
 # Configurações para campos criptografados
-FIELD_ENCRYPTION_KEY = config('FIELD_ENCRYPTION_KEY', default='sua-chave-de-criptografia-aqui-32-caracteres')
+FIELD_ENCRYPTION_KEY = config('FIELD_ENCRYPTION_KEY', default='X_Bye-jt65P3-BcNgEBVrkN3rRBAhS_-kWUjb2avmJ4=')
 
 # Templates
 TEMPLATES[0]['DIRS'] = [BASE_DIR / 'templates']
